@@ -1,0 +1,9 @@
+{
+    "name": "my-addon", 
+    "license": "MPL 2.0", 
+    "author": "", 
+    "version": "0.1", 
+    "fullName": "my-addon", 
+    "id": "jid1-uAJCOAwOF6sGdw", 
+    "description": "a basic add-on"
+}
