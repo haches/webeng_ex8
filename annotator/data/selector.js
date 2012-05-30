@@ -29,10 +29,7 @@ $('*').mouseenter(function () {
 	$(matchedElement).css('background-color', 'yellow');
 	$(matchedElement).bind('click.annotator', function(event) {
 		event.stopPropagation();
-		event.preventDefault();
-		
-		console.log("About to emit a 'show'");
-		
+		event.preventDefault();		
 		self.port.emit('show',
 			[
 				document.location.toString(),
