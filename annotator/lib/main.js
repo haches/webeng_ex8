@@ -28,10 +28,11 @@ const simpleStorage = require('simple-storage');
 /**
  * The notifications module allows you to display transient,
  * toaster-style desktop messages to the user.
- * https://addons.mozilla.org/en-US/developers/docs/sdk/1.1/packages/addon-kit/docs/notifications.html
- * 
+ * https://addons.mozilla.org/en-US/developers/docs/sdk/1.1/packages/addon-kit/docs/notifications.htm 
  */
 const notifications = require("notifications");
+
+const privateBrowsing = require('private-browsing');
 
 var data = require("self").data;
 var selectors = [];
@@ -41,18 +42,24 @@ var annotatorIsOn = false;
 if (!simpleStorage.storage.annotations)
 	simpleStorage.storage.annotations = [];
   
+function canEnterAnnotations() {
+	return (annotatorIsOn && !privateBrowsing.isActive);
+}
 
 function activateSelectors() {
 	selectors.forEach(
 		function (selector) {
-			selector.postMessage(annotatorIsOn);
+			selector.postMessage(canEnterAnnotations());
 	});
 }
 
 function toggleActivation() {
+	if (privateBrowsing.isActive) {
+		return false;
+	}
 	annotatorIsOn = !annotatorIsOn;
 	activateSelectors();
-	return annotatorIsOn;
+	return canEnterAnnotations();
 }
 
 function detachWorker(worker, workerArray) {
@@ -106,7 +113,7 @@ exports.main = function() {
 	  contentScriptFile: [data.url('jquery-1.7.2.min.js'),
 	                      data.url('selector.js')],
 	  onAttach: function(worker) {
-	    worker.postMessage(annotatorIsOn);
+	    worker.postMessage(canEnterAnnotations());
 	    selectors.push(worker);
 	    worker.port.on('show', function(data) {
 	      // link the editor to the selector
@@ -170,4 +177,16 @@ exports.main = function() {
 		while (simpleStorage.quotaUsage > 1)
 			simpleStorage.storage.annotations.pop();
 	});
+	
+	privateBrowsing.on('start', function() {
+		widget.contentURL = data.url('widget/pencil-off.png');
+		activateSelectors();
+	});
+ 
+	privateBrowsing.on('stop', function() {
+		if (canEnterAnnotations()) {
+		widget.contentURL = data.url('widget/pencil-on.png');
+	activateSelectors();
+	}
+});
 }
