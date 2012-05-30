@@ -18,10 +18,29 @@ var widgets = require("widget");
  *https://addons.mozilla.org/en-US/developers/docs/sdk/1.5/packages/addon-kit/docs/page-mod.html
  */
 var pageMod = require("page-mod");
+/**
+ * The simple-storage module lets you easily and persistently store data across application
+ * restarts. If you're familiar with DOM storage on the Web, it's kind of like that, but for
+ * add-ons.
+ * https://addons.mozilla.org/en-US/developers/docs/sdk/1.0/packages/addon-kit/docs/simple-storage.html
+ */
+const simpleStorage = require('simple-storage');
+/**
+ * The notifications module allows you to display transient,
+ * toaster-style desktop messages to the user.
+ * https://addons.mozilla.org/en-US/developers/docs/sdk/1.1/packages/addon-kit/docs/notifications.html
+ * 
+ */
+const notifications = require("notifications");
 
 var data = require("self").data;
 var selectors = [];
 var annotatorIsOn = false;
+
+// initalize and array which will contain the stored annotations
+if (!simpleStorage.storage.annotations)
+	simpleStorage.storage.annotations = [];
+  
 
 function activateSelectors() {
 	selectors.forEach(
@@ -43,13 +62,29 @@ function detachWorker(worker, workerArray) {
 	}
 }
 
+/** 
+ * Function to deal with annotation. An annotation is composed of the text the user enters
+ * and the annotation anchor (i.e. URL, element ID and element content).
+ */
+function handleNewAnnotation(annotationText, anchor) {
+  	var newAnnotation = new Annotation(annotationText, anchor);
+  	simpleStorage.storage.annotations.push(newAnnotation);
+}
+
+function Annotation(annotationText, anchor) {
+	this.annotationText = annotationText;
+	this.url = anchor[0];
+	this.ancestorId = anchor[1];
+	this.anchorText = anchor[2];
+}
+
 exports.main = function() {
 
 	var widget = widgets.Widget({
 		id: "toggle-switch",
 		label: "Annotator",
 		contentURL: data.url("widget/pencil-off.png"),
-		contentScriptWhen: "ready",
+		contentScriptWhen: 'ready',
 		contentScriptFile: data.url("widget/widget.js")
 	});
 	
@@ -62,6 +97,7 @@ exports.main = function() {
 	
 	widget.port.on("right-click", function() {
 		console.log("show annotation list");
+		annotationList.show();
 	});
 	
 	var selector = pageMod.PageMod({
@@ -93,8 +129,12 @@ exports.main = function() {
 		// and hide the panel
 		onMessage: function(annotationText) {
 		  if (annotationText) {
+		  	handleNewAnnotation(annotationText, this.annotationAnchor);
+		    
+		    // TODO: this is just for debugging
 		    console.log(this.annotationAnchor);
 		    console.log(annotationText);
+		    
 		  }
 		  annotationEditor.hide();
 		},
@@ -104,5 +144,30 @@ exports.main = function() {
 		onShow: function() {
 		  this.postMessage('focus');
 		}					
+	});
+	
+	var annotationList = panels.Panel({
+		width: 420,
+		height: 200,
+		contentURL: data.url('list/annotation-list.html'),
+		contentScriptFile: [data.url('jquery-1.7.2.min.js'),
+							data.url('list/annotation-list.js')],
+		contentScriptWhen: 'ready',
+		onShow: function() {
+			this.postMessage(simpleStorage.storage.annotations);
+		},
+		onMessage: function(message) {
+			require('tabs').open(message)
+		}				
+		
+	});
+	
+	simpleStorage.on("OverQuota", function() {
+		notifications.notify({
+			title: 'Storage space exceeded',
+			text: 'Removiing recent annotations'
+		});
+		while (simpleStorage.quotaUsage > 1)
+			simpleStorage.storage.annotations.pop();
 	});
 }
